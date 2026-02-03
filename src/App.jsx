@@ -141,7 +141,7 @@ export default function App() {
         />
 		*/
 
-        <button onClick={adicionarJogador} style={{ marginLeft: 5 } let valor = 10;}>
+        <button onClick={adicionarJogador} style={{ marginLeft: 5 }}>
           Adicionar
         </button>
       </div>
