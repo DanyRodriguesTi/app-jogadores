@@ -12,8 +12,6 @@ export default function App() {
   });
 
   const [nome, setNome] = useState("");
-  //const [valor, setValor] = useState(10);
-  //const [valor, setValor] = useState(10);
 
 
   useEffect(() => {
@@ -132,15 +130,6 @@ export default function App() {
           onChange={(e) => setNome(e.target.value)}
         />
 
-       /* <input
-          type="number"
-          value={valor}
-		  placeholder="Valor" 
-          onChange={(e) => setValor(e.target.value)}
-          style={{ marginLeft: 5, width: 80 }}
-        />
-		*/
-
         <button onClick={adicionarJogador} style={{ marginLeft: 5 }}>
           Adicionar
         </button>
@@ -150,7 +139,6 @@ export default function App() {
         <thead>
           <tr>
             <th>Nome</th>
-            //<th>Valor</th>
 
             {meses.map((m) => (
               <th key={m}>{m.slice(0, 3)}</th>
@@ -164,8 +152,6 @@ export default function App() {
           {jogadores.map((j) => (
             <tr key={j.id}>
               <td>{j.nome}</td>
-             // <td>R$ {j.valor}</td>
-
               {meses.map((m) => (
                 <td key={m} align="center">
                   <input
@@ -177,9 +163,6 @@ export default function App() {
               ))}
 
               <td>
-                /*<button onClick={() => excluirJogador(j.id)}>
-                  Excluir
-                </button>*/
 				
 				<button onClick={() => alterarJogadores(j.id)}>
 					Alterar
@@ -210,10 +193,6 @@ export default function App() {
       </table>
 
       <br />
-
-     /* <button onClick={gerarRelatorio}>
-        Gerar Relatório
-      </button>*/
 	  
 	<button onClick={gerarRelatorio}>
 	  Gerar Relatório
