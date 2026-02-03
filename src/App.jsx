@@ -12,7 +12,9 @@ export default function App() {
   });
 
   const [nome, setNome] = useState("");
-  const [valor, setValor] = useState(10);
+  //const [valor, setValor] = useState(10);
+  //const [valor, setValor] = useState(10);
+
 
   useEffect(() => {
     localStorage.setItem("jogadores", JSON.stringify(jogadores));
@@ -24,7 +26,7 @@ export default function App() {
     const novo = {
       id: Date.now(),
       nome,
-      valor,
+      valor: 10, // ALTEREI AQUI
       pagamentos: meses.reduce((acc, mes) => {
         acc[mes] = false;
         return acc;
@@ -70,6 +72,55 @@ export default function App() {
     );
   }
 
+
+	function alterarJogador(index) {
+	  let nome = prompt("Digite o novo nome do jogador:", jogadores[index].nome);
+	  if (nome) {
+		jogadores[index].nome = nome;
+		// Atualiza checkboxes
+		document.querySelectorAll(`#tabela tr`)[index + 1].querySelectorAll('input[type="checkbox"]').forEach((checkbox, i) => {
+		  checkbox.checked = jogadores[index].meses[i]; // Ajuste conforme seu array
+		});
+		atualizarTabela();
+	  }
+	}
+	
+	
+	function alterarJogadores(id) {
+	  const novoNome = prompt("Digite o novo nome:");
+
+	  if (!novoNome) return;
+
+	  setJogadores(
+		jogadores.map((j) =>
+		  j.id === id
+			? { ...j, nome: novoNome }
+			: j
+		)
+	  );
+	}
+
+
+	function enviarWhatsApp() {
+	  let texto = "📋 Controle de Pagamentos\n\n";
+
+	  jogadores.forEach((j) => {
+		texto += `👤 ${j.nome}\n`;
+
+		meses.forEach((m) => {
+		  texto += `${m.slice(0, 3)}: ${j.pagamentos[m] ? "✅" : "❌"} `;
+		});
+
+		texto += "\n\n";
+	  });
+
+	  const url =
+		"https://wa.me/?text=" +
+		encodeURIComponent(texto);
+
+	  window.open(url, "_blank");
+	}
+
   return (
     <div style={{ padding: 20, fontFamily: "Arial" }}>
       <h1>⚽ Controle de Pagamentos</h1>
@@ -81,14 +132,16 @@ export default function App() {
           onChange={(e) => setNome(e.target.value)}
         />
 
-        <input
+       /* <input
           type="number"
           value={valor}
+		  placeholder="Valor" 
           onChange={(e) => setValor(e.target.value)}
           style={{ marginLeft: 5, width: 80 }}
         />
+		*/
 
-        <button onClick={adicionarJogador} style={{ marginLeft: 5 }}>
+        <button onClick={adicionarJogador} style={{ marginLeft: 5 } let valor = 10;}>
           Adicionar
         </button>
       </div>
@@ -97,7 +150,7 @@ export default function App() {
         <thead>
           <tr>
             <th>Nome</th>
-            <th>Valor</th>
+            //<th>Valor</th>
 
             {meses.map((m) => (
               <th key={m}>{m.slice(0, 3)}</th>
@@ -111,7 +164,7 @@ export default function App() {
           {jogadores.map((j) => (
             <tr key={j.id}>
               <td>{j.nome}</td>
-              <td>R$ {j.valor}</td>
+             // <td>R$ {j.valor}</td>
 
               {meses.map((m) => (
                 <td key={m} align="center">
@@ -124,10 +177,25 @@ export default function App() {
               ))}
 
               <td>
-                <button onClick={() => excluirJogador(j.id)}>
+                /*<button onClick={() => excluirJogador(j.id)}>
                   Excluir
-                </button>
+                </button>*/
+				
+				<button onClick={() => alterarJogadores(j.id)}>
+					Alterar
+				  </button>
+
+				  <button
+					onClick={() => excluirJogador(j.id)}
+					style={{ marginLeft: 5 }}
+				  >
+					Excluir
+				  </button>	
+				
               </td>
+			  <td>
+			  <button onclick="alterarJogador(index)">Alterar</button>
+			  </td>
             </tr>
           ))}
 
@@ -143,9 +211,22 @@ export default function App() {
 
       <br />
 
-      <button onClick={gerarRelatorio}>
+     /* <button onClick={gerarRelatorio}>
         Gerar Relatório
-      </button>
+      </button>*/
+	  
+	<button onClick={gerarRelatorio}>
+	  Gerar Relatório
+	</button>
+
+	<button
+	  onClick={enviarWhatsApp}
+	  style={{ marginLeft: 10 }}
+	>
+	  WhatsApp
+	</button>
+
+	  
     </div>
   );
 }
