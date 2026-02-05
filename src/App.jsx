@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { GoogleLogin, googleLogout } from "@react-oauth/google";
-import jwt_decode from "jwt-decode";
+import { useGoogleLogin } from "@react-oauth/google";
 
 export default function App() {
   const meses = [
@@ -20,75 +19,69 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  const [nome, setNome] = useState("");
+
   const [mesesFechados, setMesesFechados] = useState(() => {
     const saved = localStorage.getItem("mesesFechados");
     return saved ? JSON.parse(saved) : {};
   });
 
-  const [nome, setNome] = useState("");
   const [editandoId, setEditandoId] = useState(null);
 
-  // =========================
-  // LOCAL STORAGE
-  // =========================
+  // =====================
+  // SALVAR LOCAL
+  // =====================
   useEffect(() => {
     localStorage.setItem("jogadores", JSON.stringify(jogadores));
     localStorage.setItem("mesesFechados", JSON.stringify(mesesFechados));
   }, [jogadores, mesesFechados]);
 
-  // =========================
-  // GOOGLE SCRIPT
-  // =========================
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
-    script.async = true;
-    script.defer = true;
-    document.body.appendChild(script);
-  }, []);
+  // =====================
+  // LOGIN GOOGLE
+  // =====================
+  const login = useGoogleLogin({
+    scope: "https://www.googleapis.com/auth/drive.file",
 
-  // =========================
-  // LOGIN
-  // =========================
-  function loginSucesso(response) {
-    try {
-      const user = jwt_decode(response.credential);
+    onSuccess: (tokenResponse) => {
+      setToken(tokenResponse.access_token);
+      setUsuario({ logado: true });
+    },
 
-      setUsuario(user);
-
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id:
-          "277718466842-ajr820s0ra7i8rtb6op7am8hufbmlocl.apps.googleusercontent.com",
-        scope: "https://www.googleapis.com/auth/drive.file",
-        callback: (res) => {
-          setToken(res.access_token);
-        },
-      });
-
-      client.requestAccessToken();
-
-    } catch (err) {
-      console.error(err);
-      alert("Erro no login");
-    }
-  }
+    onError: () => {
+      alert("Erro no login Google");
+    },
+  });
 
   function sair() {
-    googleLogout();
     setUsuario(null);
     setToken(null);
   }
 
-  // =========================
-  // JOGADORES
-  // =========================
+  // =====================
+  // FECHAR MÊS
+  // =====================
+  function toggleMesFechado(mes) {
+    setMesesFechados((prev) => ({
+      ...prev,
+      [mes]: !prev[mes],
+    }));
+  }
+
+  // =====================
+  // SALVAR JOGADOR
+  // =====================
   function salvarJogador() {
-    if (!nome.trim()) return;
+    if (!nome.trim()) {
+      alert("Digite o nome");
+      return;
+    }
 
     if (editandoId) {
-      setJogadores(jogadores.map(j =>
-        j.id === editandoId ? { ...j, nome } : j
-      ));
+      setJogadores(
+        jogadores.map((j) =>
+          j.id === editandoId ? { ...j, nome } : j
+        )
+      );
 
       setEditandoId(null);
       setNome("");
@@ -98,9 +91,10 @@ export default function App() {
     const novo = {
       id: Date.now(),
       nome,
-      pagamentos: meses.reduce((a, m) => {
-        a[m] = false;
-        return a;
+      valor: valorMensal,
+      pagamentos: meses.reduce((acc, mes) => {
+        acc[mes] = false;
+        return acc;
       }, {}),
     };
 
@@ -108,63 +102,163 @@ export default function App() {
     setNome("");
   }
 
-  function togglePagamento(id, mes, nome) {
+  // =====================
+  // PAGAMENTO
+  // =====================
+  function togglePagamento(id, mes, nomeJogador) {
     if (mesesFechados[mes]) return;
 
-    const jogador = jogadores.find(j => j.id === id);
+    const jogador = jogadores.find((j) => j.id === id);
+
+    if (!jogador) return;
 
     if (jogador.pagamentos[mes]) {
-      if (!window.confirm(`Desmarcar ${nome}?`)) return;
+      const confirmar = window.confirm(
+        `Deseja desmarcar ${nomeJogador} em ${mes}?`
+      );
+
+      if (!confirmar) return;
     }
 
-    setJogadores(jogadores.map(j =>
-      j.id === id
-        ? {
-            ...j,
-            pagamentos: {
-              ...j.pagamentos,
-              [mes]: !j.pagamentos[mes],
-            },
-          }
-        : j
-    ));
+    setJogadores(
+      jogadores.map((j) =>
+        j.id === id
+          ? {
+              ...j,
+              pagamentos: {
+                ...j.pagamentos,
+                [mes]: !j.pagamentos[mes],
+              },
+            }
+          : j
+      )
+    );
   }
 
+  // =====================
+  // EXCLUIR
+  // =====================
   function excluirJogador(id) {
-    if (window.confirm("Excluir?")) {
-      setJogadores(jogadores.filter(j => j.id !== id));
+    if (window.confirm("Deseja excluir?")) {
+      setJogadores(jogadores.filter((j) => j.id !== id));
     }
   }
 
-  function toggleMesFechado(m) {
-    setMesesFechados(p => ({
-      ...p,
-      [m]: !p[m],
-    }));
+  function editarJogador(j) {
+    setNome(j.nome);
+    setEditandoId(j.id);
   }
 
-  // =========================
+  // =====================
+  // RELATÓRIO
+  // =====================
+  function gerarRelatorio() {
+    let relatorio =
+      "📋 RELATÓRIO\n\n" +
+      `👥 Jogadores: ${jogadores.length}\n\n`;
+
+    meses.forEach((mes) => {
+      const pagos = jogadores.filter(
+        (j) => j.pagamentos[mes]
+      ).length;
+
+      const total = pagos * valorMensal;
+
+      relatorio += `${mes}: ${pagos} pagos | R$ ${total}\n`;
+    });
+
+    alert(relatorio);
+  }
+
+  // =====================
+  // PDF
+  // =====================
+  function gerarPDF() {
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text("Relatório de Pagamentos", 14, 15);
+
+    doc.setFontSize(10);
+    doc.text(
+      `Total: ${jogadores.length} jogadores`,
+      14,
+      22
+    );
+
+    const head = [
+      ["Nome", ...meses.map((m) => m.slice(0, 3))]
+    ];
+
+    const body = jogadores.map((j) => [
+      j.nome,
+      ...meses.map((m) => (j.pagamentos[m] ? "PG" : "DV")),
+    ]);
+
+    autoTable(doc, {
+      head,
+      body,
+      startY: 28,
+      styles: { fontSize: 8, halign: "center" },
+    });
+
+    doc.save("relatorio.pdf");
+  }
+
+  // =====================
+  // WHATSAPP
+  // =====================
+  function enviarWhatsApp() {
+    let texto = "📋 Pagamentos\n\n";
+
+    jogadores.forEach((j) => {
+      texto += `👤 ${j.nome}\n`;
+
+      meses.forEach((m) => {
+        texto += `${m.slice(0, 3)}: ${
+          j.pagamentos[m] ? "✅" : "❌"
+        } `;
+      });
+
+      texto += "\n\n";
+    });
+
+    window.open(
+      "https://wa.me/?text=" + encodeURIComponent(texto),
+      "_blank"
+    );
+  }
+
+  // =====================
   // BACKUP
-  // =========================
+  // =====================
   async function fazerBackup() {
     if (!token) {
-      alert("Faça login");
+      alert("Faça login primeiro");
       return;
     }
 
-    const blob = new Blob(
-      [JSON.stringify({ jogadores, mesesFechados })],
-      { type: "application/json" }
-    );
+    const dados = {
+      jogadores,
+      mesesFechados,
+    };
+
+    const blob = new Blob([JSON.stringify(dados)], {
+      type: "application/json",
+    });
+
+    const metadata = {
+      name: "app-jogadores-backup.json",
+      mimeType: "application/json",
+    };
 
     const form = new FormData();
 
     form.append(
       "metadata",
-      new Blob(
-        [JSON.stringify({ name: "backup.json" })],
-        { type: "application/json" }
-      )
+      new Blob([JSON.stringify(metadata)], {
+        type: "application/json",
+      })
     );
 
     form.append("file", blob);
@@ -180,108 +274,184 @@ export default function App() {
       }
     );
 
-    alert("✅ Backup salvo");
+    alert("✅ Backup salvo no Drive!");
   }
 
-  // =========================
+  async function restaurarBackup() {
+    if (!token) {
+      alert("Faça login primeiro");
+      return;
+    }
+
+    const res = await fetch(
+      "https://www.googleapis.com/drive/v3/files?q=name='app-jogadores-backup.json'",
+      {
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      }
+    );
+
+    const data = await res.json();
+
+    if (!data.files?.length) {
+      alert("Nenhum backup encontrado");
+      return;
+    }
+
+    const fileId = data.files[0].id;
+
+    const file = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+      {
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      }
+    );
+
+    const conteudo = await file.json();
+
+    setJogadores(conteudo.jogadores || []);
+    setMesesFechados(conteudo.mesesFechados || {});
+
+    alert("✅ Restaurado!");
+  }
+
+  // =====================
   // TELA
-  // =========================
+  // =====================
   return (
-    <div style={{ maxWidth: 1200, margin: "auto", padding: 15 }}>
+    <>
+      <div
+        style={{
+          maxWidth: 1200,
+          margin: "auto",
+          padding: 15,
+          fontFamily: "Arial",
+        }}
+      >
+        <h2 align="center">
+          ⚽ Controle de Pagamentos
+        </h2>
 
-      <h2 align="center">⚽ Controle</h2>
+        <p align="center">
+          👥 Total: {jogadores.length}
+        </p>
 
-      <p align="center">
-        Jogadores: {jogadores.length}
-      </p>
+        {/* MESES */}
+        <div align="center">
+          {meses.map((mes) => (
+            <button
+              key={mes}
+              onClick={() => toggleMesFechado(mes)}
+              style={{
+                margin: 3,
+                background: mesesFechados[mes]
+                  ? "#f44336"
+                  : "#4caf50",
+                color: "#fff",
+              }}
+            >
+              {mesesFechados[mes] ? "🔓" : "🔒"} {mes}
+            </button>
+          ))}
+        </div>
 
-      <div align="center">
-        {meses.map(m => (
-          <button
-            key={m}
-            onClick={() => toggleMesFechado(m)}
-            style={{
-              margin: 2,
-              background: mesesFechados[m] ? "red" : "green",
-              color: "white",
-            }}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
+        <br />
 
-      <br />
+        {/* FORM */}
+        <input
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          placeholder="Nome"
+        />
 
-      <input
-        value={nome}
-        onChange={(e) => setNome(e.target.value)}
-        placeholder="Nome"
-      />
+        <button onClick={salvarJogador}>
+          {editandoId ? "Salvar" : "Adicionar"}
+        </button>
 
-      <button onClick={salvarJogador}>
-        {editandoId ? "Salvar" : "Adicionar"}
-      </button>
+        <br /><br />
 
-      <br /><br />
+        {/* TABELA */}
+        <table border="1" width="100%">
+          <thead>
+            <tr>
+              <th>Nome</th>
 
-      <table border="1" width="100%">
-        <thead>
-          <tr>
-            <th>Nome</th>
-            {meses.map(m => (
-              <th key={m}>{m.slice(0,3)}</th>
-            ))}
-            <th>Ações</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {jogadores.map(j => (
-            <tr key={j.id}>
-              <td>{j.nome}</td>
-
-              {meses.map(m => (
-                <td key={m} align="center">
-                  <input
-                    type="checkbox"
-                    checked={j.pagamentos[m]}
-                    disabled={mesesFechados[m]}
-                    onChange={() =>
-                      togglePagamento(j.id, m, j.nome)
-                    }
-                  />
-                </td>
+              {meses.map((m) => (
+                <th key={m}>{m.slice(0, 3)}</th>
               ))}
 
-              <td>
-                <button onClick={() => excluirJogador(j.id)}>
-                  ❌
-                </button>
-              </td>
+              <th>Ações</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
 
-      <br />
+          <tbody>
+            {jogadores.map((j) => (
+              <tr key={j.id}>
+                <td>{j.nome}</td>
 
-      <div align="center">
+                {meses.map((m) => (
+                  <td key={m} align="center">
+                    <input
+                      type="checkbox"
+                      checked={j.pagamentos[m]}
+                      disabled={mesesFechados[m]}
+                      onChange={() =>
+                        togglePagamento(j.id, m, j.nome)
+                      }
+                    />
+                  </td>
+                ))}
 
+                <td>
+                  <button onClick={() => editarJogador(j)}>
+                    ✏️
+                  </button>
+
+                  <button
+                    onClick={() => excluirJogador(j.id)}
+                  >
+                    ❌
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <br />
+
+        <button onClick={gerarRelatorio}>
+          📊 Relatório
+        </button>
+
+        <button onClick={gerarPDF}>
+          📄 PDF
+        </button>
+
+        <button onClick={enviarWhatsApp}>
+          📱 WhatsApp
+        </button>
+      </div>
+
+      {/* GOOGLE */}
+      <div align="center" style={{ marginBottom: 30 }}>
         {!usuario ? (
-
-          <GoogleLogin
-            onSuccess={loginSucesso}
-            onError={() => alert("Erro")}
-          />
-
+          <button onClick={() => login()}>
+            🔐 Login com Google
+          </button>
         ) : (
-
           <>
-            <p>✅ {usuario.name}</p>
+            <p>✅ Logado</p>
 
             <button onClick={fazerBackup}>
               ☁️ Backup
+            </button>
+
+            <button onClick={restaurarBackup}>
+              📥 Restaurar
             </button>
 
             <button onClick={sair}>
@@ -289,9 +459,7 @@ export default function App() {
             </button>
           </>
         )}
-
       </div>
-
-    </div>
+    </>
   );
 }
