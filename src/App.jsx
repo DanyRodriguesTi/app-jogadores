@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { GoogleLogin, googleLogout } from "@react-oauth/google";
-import { gapi } from "gapi-script";
 
 export default function App() {
   const meses = [
@@ -40,21 +39,7 @@ export default function App() {
   // =====================
   // GOOGLE API INIT
   // =====================
-  useEffect(() => {
-    function start() {
-      gapi.client.init({
-        clientId:
-          "277718466842-ajr820s0ra7i8rtb6op7am8hufbmlocl.apps.googleusercontent.com",
-        scope: "https://www.googleapis.com/auth/drive.file",
-        discoveryDocs: [
-          "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest",
-        ],
-      });
-    }
-
-    gapi.load("client:auth2", start);
-  }, []);
-
+  
   // =====================
   // FECHAR MÊS
   // =====================
@@ -230,16 +215,21 @@ export default function App() {
   // =====================
   // GOOGLE LOGIN
   // =====================
-  function loginSucesso(response) {
-    setToken(response.access_token);
-    setUsuario({ nome: "Google User" });
-  }
+	function loginSucesso(response) {
+	  const accessToken = response.access_token;
 
-  function sair() {
-    googleLogout();
-    setUsuario(null);
-    setToken(null);
-  }
+	  fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+		headers: {
+		  Authorization: "Bearer " + accessToken,
+		},
+	  })
+		.then((res) => res.json())
+		.then((user) => {
+		  setUsuario(user);
+		  setToken(accessToken);
+		});
+	}
+
 
   // =====================
   // BACKUP
@@ -452,9 +442,12 @@ export default function App() {
       <div align="center">
         {!usuario ? (
           <GoogleLogin
-            onSuccess={loginSucesso}
-            onError={() => alert("Erro login")}
-          />
+			  onSuccess={(credentialResponse) => {
+				loginSucesso(credentialResponse);
+			  }}
+			  onError={() => alert("Erro no login")}
+			/>
+
         ) : (
           <>
             <p>✅ Logado</p>
