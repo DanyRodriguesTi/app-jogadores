@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { GoogleLogin, googleLogout } from "@react-oauth/google";
+import jwt_decode from "jwt-decode";
+
 
 export default function App() {
   const meses = [
@@ -216,18 +218,29 @@ export default function App() {
   // GOOGLE LOGIN
   // =====================
 	function loginSucesso(response) {
-	  const accessToken = response.access_token;
+	  try {
+		const userObject = jwt_decode(response.credential);
 
-	  fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-		headers: {
-		  Authorization: "Bearer " + accessToken,
-		},
-	  })
-		.then((res) => res.json())
-		.then((user) => {
-		  setUsuario(user);
-		  setToken(accessToken);
+		setUsuario({
+		  name: userObject.name,
+		  email: userObject.email,
+		  picture: userObject.picture,
 		});
+
+		// Buscar access token real via Google OAuth
+		window.google.accounts.oauth2.initTokenClient({
+		  client_id:
+			"277718466842-ajr820s0ra7i8rtb6op7am8hufbmlocl.apps.googleusercontent.com",
+		  scope: "https://www.googleapis.com/auth/drive.file",
+		  callback: (tokenResponse) => {
+			setToken(tokenResponse.access_token);
+		  },
+		}).requestAccessToken();
+
+	  } catch (err) {
+		console.error(err);
+		alert("Erro no login");
+	  }
 	}
 
 
@@ -442,11 +455,11 @@ export default function App() {
       <div align="center">
         {!usuario ? (
           <GoogleLogin
-			  onSuccess={(credentialResponse) => {
-				loginSucesso(credentialResponse);
-			  }}
+			  onSuccess={loginSucesso}
 			  onError={() => alert("Erro no login")}
+			  useOneTap
 			/>
+
 
         ) : (
           <>
