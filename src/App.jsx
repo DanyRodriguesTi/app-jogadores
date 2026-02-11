@@ -1,88 +1,97 @@
 import React, { useState, useEffect } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { useGoogleLogin } from "@react-oauth/google";
 
 export default function App() {
+
   const meses = [
     "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
     "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro",
   ];
 
   const valorMensal = 15;
+  const jogadoresPorPagina = 10;
 
-  const [usuario, setUsuario] = useState(null);
-  const [token, setToken] = useState(null);
+  const [mesSelecionado, setMesSelecionado] = useState(
+    meses[new Date().getMonth()]
+  );
+
+  const [paginaAtual, setPaginaAtual] = useState(1);
 
   const [jogadores, setJogadores] = useState(() => {
     const saved = localStorage.getItem("jogadores");
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [nome, setNome] = useState("");
+  const [despesas, setDespesas] = useState(() => {
+    const saved = localStorage.getItem("despesas");
+    return saved ? JSON.parse(saved) : {};
+  });
 
   const [mesesFechados, setMesesFechados] = useState(() => {
     const saved = localStorage.getItem("mesesFechados");
     return saved ? JSON.parse(saved) : {};
   });
 
+  const [nome, setNome] = useState("");
   const [editandoId, setEditandoId] = useState(null);
+  const [valorDespesa, setValorDespesa] = useState("");
+  const [historicoDespesa, setHistoricoDespesa] = useState("");
 
-  // =====================
-  // SALVAR LOCAL
-  // =====================
   useEffect(() => {
     localStorage.setItem("jogadores", JSON.stringify(jogadores));
+    localStorage.setItem("despesas", JSON.stringify(despesas));
     localStorage.setItem("mesesFechados", JSON.stringify(mesesFechados));
-  }, [jogadores, mesesFechados]);
+  }, [jogadores, despesas, mesesFechados]);
 
-  // =====================
-  // LOGIN GOOGLE
-  // =====================
-  const login = useGoogleLogin({
-    scope: "https://www.googleapis.com/auth/drive.file",
+  useEffect(() => {
+    setPaginaAtual(1);
+  }, [mesSelecionado]);
 
-    onSuccess: (tokenResponse) => {
-      setToken(tokenResponse.access_token);
-      setUsuario({ logado: true });
-    },
+  const mesFechado = mesesFechados[mesSelecionado];
 
-    onError: () => {
-      alert("Erro no login Google");
-    },
-  });
+  // ================= PAGINAÇÃO =================
+  const totalPaginas = Math.max(1,
+  Math.ceil(jogadores.length / jogadoresPorPagina)
+);
 
-  function sair() {
-    setUsuario(null);
-    setToken(null);
+  const indiceInicial = (paginaAtual - 1) * jogadoresPorPagina;
+  const jogadoresPagina = jogadores.slice(
+    indiceInicial,
+    indiceInicial + jogadoresPorPagina
+  );
+  const quantidadePaginaAtual = jogadoresPagina.length;
+
+
+  function proximaPagina() {
+    if (paginaAtual < totalPaginas)
+      setPaginaAtual(paginaAtual + 1);
   }
 
-  // =====================
-  // FECHAR MÊS
-  // =====================
+  function paginaAnterior() {
+    if (paginaAtual > 1)
+      setPaginaAtual(paginaAtual - 1);
+  }
+
+  // ================= FECHAR MÊS =================
   function toggleMesFechado(mes) {
-    setMesesFechados((prev) => ({
+    setMesesFechados(prev => ({
       ...prev,
-      [mes]: !prev[mes],
+      [mes]: !prev[mes]
     }));
   }
 
-  // =====================
-  // SALVAR JOGADOR
-  // =====================
+  // ================= JOGADORES =================
   function salvarJogador() {
-    if (!nome.trim()) {
-      alert("Digite o nome");
-      return;
-    }
+
+    if (!nome.trim()) return alert("Digite o nome");
 
     if (editandoId) {
-      setJogadores(
-        jogadores.map((j) =>
-          j.id === editandoId ? { ...j, nome } : j
-        )
-      );
+      const atualizada = jogadores.map(j =>
+        j.id === editandoId ? { ...j, nome: nome.toUpperCase() } : j
+      ).sort((a,b)=>a.nome.localeCompare(b.nome));
 
+      setJogadores(atualizada);
       setEditandoId(null);
       setNome("");
       return;
@@ -90,376 +99,317 @@ export default function App() {
 
     const novo = {
       id: Date.now(),
-      nome,
-      valor: valorMensal,
+      nome: nome.toUpperCase(),
       pagamentos: meses.reduce((acc, mes) => {
         acc[mes] = false;
         return acc;
-      }, {}),
+      }, {})
     };
 
-    setJogadores([...jogadores, novo]);
+    setJogadores([...jogadores, novo].sort((a,b)=>a.nome.localeCompare(b.nome)));
     setNome("");
   }
 
-  // =====================
-  // PAGAMENTO
-  // =====================
-  function togglePagamento(id, mes, nomeJogador) {
-    if (mesesFechados[mes]) return;
-
-    const jogador = jogadores.find((j) => j.id === id);
-
-    if (!jogador) return;
-
-    if (jogador.pagamentos[mes]) {
-      const confirmar = window.confirm(
-        `Deseja desmarcar ${nomeJogador} em ${mes}?`
-      );
-
-      if (!confirmar) return;
-    }
-
-    setJogadores(
-      jogadores.map((j) =>
-        j.id === id
-          ? {
-              ...j,
-              pagamentos: {
-                ...j.pagamentos,
-                [mes]: !j.pagamentos[mes],
-              },
-            }
-          : j
-      )
-    );
-  }
-
-  // =====================
-  // EXCLUIR
-  // =====================
-  function excluirJogador(id) {
-    if (window.confirm("Deseja excluir?")) {
-      setJogadores(jogadores.filter((j) => j.id !== id));
-    }
-  }
-
   function editarJogador(j) {
+    if (mesFechado) return;
     setNome(j.nome);
     setEditandoId(j.id);
   }
 
-  // =====================
-  // RELATÓRIO
-  // =====================
-  function gerarRelatorio() {
-    let relatorio =
-      "📋 RELATÓRIO\n\n" +
-      `👥 Jogadores: ${jogadores.length}\n\n`;
-
-    meses.forEach((mes) => {
-      const pagos = jogadores.filter(
-        (j) => j.pagamentos[mes]
-      ).length;
-
-      const total = pagos * valorMensal;
-
-      relatorio += `${mes}: ${pagos} pagos | R$ ${total}\n`;
-    });
-
-    alert(relatorio);
+  function excluirJogador(id) {
+    if (mesFechado) return;
+    if (window.confirm("Excluir jogador?"))
+      setJogadores(jogadores.filter(j => j.id !== id));
   }
 
-  // =====================
-  // PDF
-  // =====================
-  function gerarPDF() {
-    const doc = new jsPDF();
+  function togglePagamento(id, mes, nomeJogador) {
 
-    doc.setFontSize(16);
-    doc.text("Relatório de Pagamentos", 14, 15);
+  if (mesFechado) return;
 
-    doc.setFontSize(10);
-    doc.text(
-      `Total: ${jogadores.length} jogadores`,
-      14,
-      22
+  setJogadores(prevJogadores => {
+
+    const jogadorAtual = prevJogadores.find(j => j.id === id);
+    if (!jogadorAtual) return prevJogadores;
+
+    if (jogadorAtual.pagamentos[mes]) {
+      if (!window.confirm(`Deseja desmarcar ${nomeJogador} em ${mes}?`))
+        return prevJogadores;
+    }
+
+    const atualizados = prevJogadores.map(j =>
+      j.id === id
+        ? {
+            ...j,
+            pagamentos: {
+              ...j.pagamentos,
+              [mes]: !j.pagamentos[mes]
+            }
+          }
+        : j
     );
 
-    const head = [
-      ["Nome", ...meses.map((m) => m.slice(0, 3))]
-    ];
+    return [...atualizados];
+  });
+}
 
-    const body = jogadores.map((j) => [
+  // ================= DESPESAS =================
+  function adicionarDespesa() {
+
+    if (mesFechado) return alert("Mês fechado!");
+
+    if (!valorDespesa || !historicoDespesa)
+      return alert("Preencha valor e histórico");
+
+    const nova = {
+      id: Date.now(),
+      valor: parseFloat(valorDespesa),
+      historico: historicoDespesa.toUpperCase()
+    };
+
+    const listaMes = despesas[mesSelecionado] || [];
+
+    setDespesas({
+      ...despesas,
+      [mesSelecionado]: [...listaMes, nova]
+    });
+
+    setValorDespesa("");
+    setHistoricoDespesa("");
+  }
+
+  function excluirDespesa(id) {
+
+    if (mesFechado) return;
+
+    if (!window.confirm("Deseja excluir essa despesa?")) return;
+
+    const listaMes = despesas[mesSelecionado] || [];
+
+    setDespesas({
+      ...despesas,
+      [mesSelecionado]: listaMes.filter(d => d.id !== id)
+    });
+  }
+
+  // ================= CÁLCULOS =================
+  // ================= CÁLCULOS =================
+	const totalPagos = jogadores.reduce((acc, j) => {
+	  return j.pagamentos?.[mesSelecionado] ? acc + 1 : acc;
+	}, 0);
+
+	const totalReceita = totalPagos * valorMensal;
+
+	const totalDespesas = (despesas[mesSelecionado] || [])
+	  .reduce((acc, d) => acc + Number(d.valor), 0);
+
+	const saldo = totalReceita - totalDespesas;
+
+
+  // ================= RELATÓRIOS =================
+  function gerarRelatorioMensal() {
+
+    let texto = `📊 RELATÓRIO ${mesSelecionado}\n\n`;
+
+    texto += `Total Jogadores: ${jogadores.length}\n`;
+    texto += `Pagaram: ${totalPagos}\n`;
+    texto += `Faltam: ${jogadores.length - totalPagos}\n\n`;	
+    texto += `Receita: R$ ${totalReceita}\n`;
+    texto += `Despesas: R$ ${totalDespesas}\n`;
+    texto += `Saldo: R$ ${saldo}\n\n`;
+
+    texto += "Despesas:\n";
+    (despesas[mesSelecionado] || []).forEach(d => {
+      texto += `- ${d.historico} R$ ${d.valor}\n`;
+    });
+
+    alert(texto);
+  }
+
+  function gerarRelatorioGeral() {
+
+    let texto = "📊 RELATÓRIO GERAL\n\n";
+    texto += `Total Jogadores: ${jogadores.length}\n\n`;
+
+    meses.forEach(mes => {
+
+      const pagosMes = jogadores.filter(j => j.pagamentos[mes]).length;
+      const despesasMes = (despesas[mes] || [])
+        .reduce((acc,d)=>acc + d.valor,0);
+
+      texto += `📅 ${mes}\n`;
+      texto += `Pagaram: ${pagosMes}\n`;
+      texto += `Faltam: ${jogadores.length - pagosMes}\n`;
+      texto += `Saldo: R$ ${(pagosMes * valorMensal) - despesasMes}\n\n`;
+    });
+
+    alert(texto);
+  }
+
+  function gerarRelatorioWhatsApp() {
+
+    let texto = `📊 *RELATÓRIO ${mesSelecionado}*\n\n`;
+    texto += `Saldo: R$ ${saldo}\n\n`;
+
+    jogadores.forEach(j => {
+      texto += `${j.pagamentos[mesSelecionado] ? "✅" : "❌"} ${j.nome}\n`;
+    });
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`);
+  }
+
+  function gerarRelatorioPDF() {
+
+  const doc = new jsPDF();
+
+  doc.text(`RELATÓRIO ${mesSelecionado}`, 14, 15);
+  doc.text(`Receita: R$ ${totalReceita}`, 14, 25);
+  doc.text(`Despesas: R$ ${totalDespesas}`, 14, 32);
+  doc.text(`Saldo: R$ ${saldo}`, 14, 39);
+
+  // ================= TABELA JOGADORES =================
+  autoTable(doc, {
+    startY: 50,
+    head: [["Nome", "Status"]],
+    body: jogadores.map(j => [
       j.nome,
-      ...meses.map((m) => (j.pagamentos[m] ? "PG" : "DV")),
-    ]);
+      j.pagamentos?.[mesSelecionado] ? "PAGO" : "PENDENTE"
+    ])
+  });
 
-    autoTable(doc, {
-      head,
-      body,
-      startY: 28,
-      styles: { fontSize: 8, halign: "center" },
-    });
+  // ================= TABELA DESPESAS =================
+  const finalY = doc.lastAutoTable.finalY || 60;
 
-    doc.save("relatorio.pdf");
-  }
+  autoTable(doc, {
+    startY: finalY + 10,
+    head: [["Histórico", "Valor"]],
+    body: (despesas[mesSelecionado] || []).map(d => [
+      d.historico,
+      `R$ ${d.valor}`
+    ])
+  });
 
-  // =====================
-  // WHATSAPP
-  // =====================
-  function enviarWhatsApp() {
-    let texto = "📋 Pagamentos\n\n";
+  doc.save(`Relatorio_${mesSelecionado}.pdf`);
+}
 
-    jogadores.forEach((j) => {
-      texto += `👤 ${j.nome}\n`;
-
-      meses.forEach((m) => {
-        texto += `${m.slice(0, 3)}: ${
-          j.pagamentos[m] ? "✅" : "❌"
-        } `;
-      });
-
-      texto += "\n\n";
-    });
-
-    window.open(
-      "https://wa.me/?text=" + encodeURIComponent(texto),
-      "_blank"
-    );
-  }
-
-  // =====================
-  // BACKUP
-  // =====================
-  async function fazerBackup() {
-    if (!token) {
-      alert("Faça login primeiro");
-      return;
-    }
-
-    const dados = {
-      jogadores,
-      mesesFechados,
-    };
-
-    const blob = new Blob([JSON.stringify(dados)], {
-      type: "application/json",
-    });
-
-    const metadata = {
-      name: "app-jogadores-backup.json",
-      mimeType: "application/json",
-    };
-
-    const form = new FormData();
-
-    form.append(
-      "metadata",
-      new Blob([JSON.stringify(metadata)], {
-        type: "application/json",
-      })
-    );
-
-    form.append("file", blob);
-
-    await fetch(
-      "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + token,
-        },
-        body: form,
-      }
-    );
-
-    alert("✅ Backup salvo no Drive!");
-  }
-
-  async function restaurarBackup() {
-    if (!token) {
-      alert("Faça login primeiro");
-      return;
-    }
-
-    const res = await fetch(
-      "https://www.googleapis.com/drive/v3/files?q=name='app-jogadores-backup.json'",
-      {
-        headers: {
-          Authorization: "Bearer " + token,
-        },
-      }
-    );
-
-    const data = await res.json();
-
-    if (!data.files?.length) {
-      alert("Nenhum backup encontrado");
-      return;
-    }
-
-    const fileId = data.files[0].id;
-
-    const file = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-      {
-        headers: {
-          Authorization: "Bearer " + token,
-        },
-      }
-    );
-
-    const conteudo = await file.json();
-
-    setJogadores(conteudo.jogadores || []);
-    setMesesFechados(conteudo.mesesFechados || {});
-
-    alert("✅ Restaurado!");
-  }
-
-  // =====================
-  // TELA
-  // =====================
+  // ================= UI =================
   return (
-    <>
-      <div
-        style={{
-          maxWidth: 1200,
-          margin: "auto",
-          padding: 15,
-          fontFamily: "Arial",
-        }}
-      >
-        <h2 align="center">
-          ⚽ Controle de Pagamentos
-        </h2>
+    <div style={{maxWidth:1000,margin:"auto",padding:10,fontFamily:"Arial"}}>
 
-        <p align="center">
-          👥 Total: {jogadores.length}
-        </p>
+      <h2 style={{textAlign:"center"}}>⚽ Controle Financeiro</h2>
 
-        {/* MESES */}
-        <div align="center">
-          {meses.map((mes) => (
-            <button
-              key={mes}
-              onClick={() => toggleMesFechado(mes)}
-              style={{
-                margin: 3,
-                background: mesesFechados[mes]
-                  ? "#f44336"
-                  : "#4caf50",
-                color: "#fff",
-              }}
-            >
-              {mesesFechados[mes] ? "🔓" : "🔒"} {mes}
-            </button>
-          ))}
-        </div>
+      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        <select value={mesSelecionado}
+          onChange={e=>setMesSelecionado(e.target.value)}>
+          {meses.map(m=><option key={m}>{m}</option>)}
+        </select>
 
-        <br />
-
-        {/* FORM */}
-        <input
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          placeholder="Nome"
-        />
-
-        <button onClick={salvarJogador}>
-          {editandoId ? "Salvar" : "Adicionar"}
+        <button onClick={()=>toggleMesFechado(mesSelecionado)}>
+          {mesFechado ? "🔓 Reabrir Mês" : "🔒 Fechar Mês"}
         </button>
 
-        <br /><br />
+       <div style={{display:"flex",flexDirection:"column"}}>
+		  <strong>
+			Página {paginaAtual} / {totalPaginas}
+		  </strong>
+		  <span>
+			Jogadores na página: {quantidadePaginaAtual}
+		  </span>
+		  <span>
+			Total de Jogadores: {jogadores.length}
+		  </span>
+		</div>
 
-        {/* TABELA */}
-        <table border="1" width="100%">
-          <thead>
-            <tr>
-              <th>Nome</th>
 
-              {meses.map((m) => (
-                <th key={m}>{m.slice(0, 3)}</th>
-              ))}
 
-              <th>Ações</th>
+        <button type="button" onClick={paginaAnterior}>⬅</button>
+		<button type="button" onClick={proximaPagina}>➡</button>
+
+      </div>
+
+      <h3>Jogadores</h3>
+
+      <input
+        value={nome}
+        onChange={e=>setNome(e.target.value)}
+        placeholder="Nome"
+        disabled={mesFechado}
+      />
+      <button onClick={salvarJogador} disabled={mesFechado}>
+        {editandoId ? "Salvar" : "Adicionar"}
+      </button>
+
+      <table border="1" width="100%">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Pago</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {jogadoresPagina.map(j=>(
+            <tr key={j.id}>
+              <td>{j.nome}</td>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={!!j.pagamentos?.[mesSelecionado]}
+
+                  disabled={mesFechado}
+                  onChange={()=>togglePagamento(j.id,mesSelecionado,j.nome)}
+                />
+              </td>
+              <td>
+                <button disabled={mesFechado}
+                  onClick={()=>editarJogador(j)}>✏</button>
+                <button disabled={mesFechado}
+                  onClick={()=>excluirJogador(j.id)}>❌</button>
+              </td>
             </tr>
-          </thead>
+          ))}
+        </tbody>
+      </table>
 
-          <tbody>
-            {jogadores.map((j) => (
-              <tr key={j.id}>
-                <td>{j.nome}</td>
+      <h3>Despesas</h3>
 
-                {meses.map((m) => (
-                  <td key={m} align="center">
-                    <input
-                      type="checkbox"
-                      checked={j.pagamentos[m]}
-                      disabled={mesesFechados[m]}
-                      onChange={() =>
-                        togglePagamento(j.id, m, j.nome)
-                      }
-                    />
-                  </td>
-                ))}
+      <input type="number"
+        placeholder="Valor"
+        value={valorDespesa}
+        onChange={e=>setValorDespesa(e.target.value)}
+        disabled={mesFechado}
+      />
 
-                <td>
-                  <button onClick={() => editarJogador(j)}>
-                    ✏️
-                  </button>
+      <input
+        placeholder="Histórico"
+        value={historicoDespesa}
+        onChange={e=>setHistoricoDespesa(e.target.value)}
+        disabled={mesFechado}
+      />
 
-                  <button
-                    onClick={() => excluirJogador(j.id)}
-                  >
-                    ❌
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <button onClick={adicionarDespesa} disabled={mesFechado}>
+        Adicionar
+      </button>
 
-        <br />
+      <ul>
+        {(despesas[mesSelecionado] || []).map(d=>(
+          <li key={d.id}>
+            {d.historico} - R$ {d.valor}
+            <button disabled={mesFechado}
+              onClick={()=>excluirDespesa(d.id)}>❌</button>
+          </li>
+        ))}
+      </ul>
 
-        <button onClick={gerarRelatorio}>
-          📊 Relatório
-        </button>
+      <h3>Caixa</h3>
+      <p>Receita: R$ {totalReceita}</p>
+      <p>Despesas: R$ {totalDespesas}</p>
+      <p><b>Saldo: R$ {saldo}</b></p>
 
-        <button onClick={gerarPDF}>
-          📄 PDF
-        </button>
+      <button onClick={gerarRelatorioMensal}>📊 Mensal</button>
+      <button onClick={gerarRelatorioGeral}>📊 Geral</button>
+      <button onClick={gerarRelatorioPDF}>📄 PDF</button>
+      <button onClick={gerarRelatorioWhatsApp}>📲 WhatsApp</button>
 
-        <button onClick={enviarWhatsApp}>
-          📱 WhatsApp
-        </button>
-      </div>
-
-      {/* GOOGLE */}
-      <div align="center" style={{ marginBottom: 30 }}>
-        {!usuario ? (
-          <button onClick={() => login()}>
-            🔐 Login com Google
-          </button>
-        ) : (
-          <>
-            <p>✅ Logado</p>
-
-            <button onClick={fazerBackup}>
-              ☁️ Backup
-            </button>
-
-            <button onClick={restaurarBackup}>
-              📥 Restaurar
-            </button>
-
-            <button onClick={sair}>
-              🚪 Sair
-            </button>
-          </>
-        )}
-      </div>
-    </>
+    </div>
   );
 }
