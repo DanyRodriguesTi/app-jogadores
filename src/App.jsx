@@ -291,11 +291,115 @@ export default function App() {
   doc.save(`Relatorio_${mesSelecionado}.pdf`);
 }
 
+
+  //==================== RELATORIO GERAL ==============================// 
+function gerarRelatorioGeralTabelaPDF() {
+
+  const doc = new jsPDF({ orientation: "landscape" });
+
+  doc.text("RELATÓRIO GERAL ANUAL", 14, 15);
+
+  // ================= CABEÇALHO =================
+  const head = [
+    ["Nome", ...meses, "Total Pago (R$)"]
+  ];
+
+  let totalGeralReceita = 0;
+
+  // ================= CORPO JOGADORES =================
+  const body = jogadores.map(jogador => {
+
+    let totalJogador = 0;
+
+    const linhaMeses = meses.map(mes => {
+      if (jogador.pagamentos?.[mes]) {
+        totalJogador += valorMensal;
+        return "PAGO";
+      }
+      return "PENDENTE";
+    });
+
+    totalGeralReceita += totalJogador;
+
+    return [
+      jogador.nome,
+      ...linhaMeses,
+      `R$ ${totalJogador}`
+    ];
+  });
+
+  // ================= RECEITA POR MÊS =================
+  const receitaPorMes = meses.map(mes => {
+    const pagos = jogadores.filter(j => j.pagamentos?.[mes]).length;
+    return pagos * valorMensal;
+  });
+
+  // ================= DESPESAS POR MÊS =================
+  const despesasPorMes = meses.map(mes => {
+    return (despesas[mes] || [])
+      .reduce((acc, d) => acc + Number(d.valor), 0);
+  });
+
+  // ================= SALDO POR MÊS =================
+  const saldoPorMes = receitaPorMes.map((receita, index) => {
+    return receita - despesasPorMes[index];
+  });
+
+  const totalGeralDespesas = despesasPorMes.reduce((a,b)=>a+b,0);
+  const totalGeralSaldo = totalGeralReceita - totalGeralDespesas;
+
+  // ================= LINHAS FINAIS =================
+  body.push([
+    "RECEITA MÊS",
+    ...receitaPorMes.map(v => `R$ ${v}`),
+    `R$ ${totalGeralReceita}`
+  ]);
+
+  body.push([
+    "DESPESA MÊS",
+    ...despesasPorMes.map(v => `R$ ${v}`),
+    `R$ ${totalGeralDespesas}`
+  ]);
+
+  body.push([
+    "SALDO MÊS",
+    ...saldoPorMes.map(v => `R$ ${v}`),
+    `R$ ${totalGeralSaldo}`
+  ]);
+
+  // ================= TABELA =================
+  autoTable(doc, {
+    startY: 25,
+    head: head,
+    body: body,
+    styles: {
+      fontSize: 7,
+      halign: "center"
+    },
+    headStyles: {
+      fillColor: [0, 102, 204]
+    },
+    didParseCell: function (data) {
+
+      const totalRows = body.length;
+
+      // Destacar últimas 3 linhas (receita, despesa, saldo)
+      if (data.row.index >= totalRows - 3) {
+        data.cell.styles.fontStyle = "bold";
+        data.cell.styles.fillColor = [230, 230, 230];
+      }
+    }
+  });
+
+  doc.save("Relatorio_Geral_Anual_Completo.pdf");
+}
+
+///=============================
   // ================= UI =================
   return (
     <div style={{maxWidth:1000,margin:"auto",padding:10,fontFamily:"Arial"}}>
 
-      <h2 style={{textAlign:"center"}}>⚽ Controle Financeiro</h2>
+      <h2 style={{textAlign:"center"}}>⚽ Controle Financeiro JOGO</h2>
 
       <div style={{display:"flex",gap:10,alignItems:"center"}}>
         <select value={mesSelecionado}
@@ -409,6 +513,7 @@ export default function App() {
       <button onClick={gerarRelatorioGeral}>📊 Geral</button>
       <button onClick={gerarRelatorioPDF}>📄 PDF</button>
       <button onClick={gerarRelatorioWhatsApp}>📲 WhatsApp</button>
+	  <button onClick={gerarRelatorioGeralTabelaPDF}>📑 PDF Geral</button>
 
     </div>
   );
