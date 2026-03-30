@@ -508,15 +508,11 @@ function gerarRelatorioGeralTabelaPDF() {
       <p>Despesas: R$ {totalDespesas}</p>
       <p><b>Saldo: R$ {saldo}</b></p>
 
-      //<button onClick={gerarRelatorioMensal}>📊 Mensal</button>
-      // <button onClick={gerarRelatorioGeral}>📊 Geral</button>
+      
 	  <button>📊 Mensal</button>
 	  <button>📄 PDF Mensal</button>
 	  <button>📑 PDF Geral</button>
-      // <button onClick={gerarRelatorioPDF}>📄 PDF Mensal</button>
-     // <button onClick={gerarRelatorioWhatsApp}>📲 WhatsApp</button>
-	 // <button onClick={gerarRelatorioGeralTabelaPDF}>📑 PDF Geral</button>
-
+      
     </div>
   );
 }
