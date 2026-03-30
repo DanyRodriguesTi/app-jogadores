@@ -191,7 +191,7 @@ export default function App() {
     });
   }
 
-  // ================= CÁLCULOS =================
+
   // ================= CÁLCULOS =================
 	const totalPagos = jogadores.reduce((acc, j) => {
 	  return j.pagamentos?.[mesSelecionado] ? acc + 1 : acc;
@@ -394,7 +394,6 @@ function gerarRelatorioGeralTabelaPDF() {
   doc.save("Relatorio_Geral_Anual_Completo.pdf");
 }
 
-///=============================
   // ================= UI =================
   return (
     <div style={{maxWidth:1000,margin:"auto",padding:10,fontFamily:"Arial"}}>
@@ -509,11 +508,14 @@ function gerarRelatorioGeralTabelaPDF() {
       <p>Despesas: R$ {totalDespesas}</p>
       <p><b>Saldo: R$ {saldo}</b></p>
 
-      <button onClick={gerarRelatorioMensal}>📊 Mensal</button>
-      <button onClick={gerarRelatorioGeral}>📊 Geral</button>
-      <button onClick={gerarRelatorioPDF}>📄 PDF</button>
-      <button onClick={gerarRelatorioWhatsApp}>📲 WhatsApp</button>
-	  <button onClick={gerarRelatorioGeralTabelaPDF}>📑 PDF Geral</button>
+      //<button onClick={gerarRelatorioMensal}>📊 Mensal</button>
+      // <button onClick={gerarRelatorioGeral}>📊 Geral</button>
+	  <button>📊 Mensal</button>
+	  <button>📄 PDF Mensal</button>
+	  <button>📑 PDF Geral</button>
+      // <button onClick={gerarRelatorioPDF}>📄 PDF Mensal</button>
+     // <button onClick={gerarRelatorioWhatsApp}>📲 WhatsApp</button>
+	 // <button onClick={gerarRelatorioGeralTabelaPDF}>📑 PDF Geral</button>
 
     </div>
   );
